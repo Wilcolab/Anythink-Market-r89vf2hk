@@ -18,6 +18,12 @@ jobs:
         with:
           node-version: "16"
 
+      - name: Upgrade Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install --only-upgrade docker-ce -y
+          sudo systemctl restart docker
+
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.6.0
         with:
