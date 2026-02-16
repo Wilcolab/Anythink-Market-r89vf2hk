@@ -1,42 +1,51 @@
-const router = require("express").Router();
-const mongoose = require("mongoose");
-const Comment = mongoose.model("Comment");
+var router = require("express").Router();
+var mongoose = require("mongoose");
+var Comment = mongoose.model("Comment");
+var User = mongoose.model("User");
+var auth = require("../auth");
 
-/**
- * GET endpoint to retrieve all comments
- * @route GET /api/comments
- * @returns {Array} Array of all comments
- */
-router.get("/", async (req, res) => {
-  try {
-    const comments = await Comment.find({});
-    res.json({ comments });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+// Preload comment objects on routes with ':comment'
+router.param("comment", function(req, res, next, id) {
+  Comment.findById(id)
+    .populate("seller")
+    .then(function(comment) {
+      if (!comment) {
+        return res.sendStatus(404);
+      }
+
+      req.comment = comment;
+
+      return next();
+    })
+    .catch(next);
 });
 
 /**
  * DELETE endpoint to delete a comment by ID
- * @route DELETE /api/comments/:id
- * @param {string} id - The comment ID to delete
- * @returns {Object} Success message or error response
+ * @route DELETE /api/comments/:comment
+ * @param {string} comment - The comment ID to delete
+ * @returns {204} No content on success
  * @throws {404} Comment not found
- * @throws {401} Unauthorized - User must be comment author
+ * @throws {401} Unauthorized
+ * @throws {403} Forbidden - User must be comment author
  */
-router.delete("/:id", async (req, res) => {
-  try {
-    const comment = await Comment.findById(req.params.id);
-    
-    if (!comment) {
-      return res.status(404).json({ error: "Comment not found" });
-    }
-    
-    await comment.remove();
-    res.json({ message: "Comment deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+router.delete("/:comment", auth.required, function(req, res, next) {
+  User.findById(req.payload.id)
+    .then(function(user) {
+      if (!user) {
+        return res.sendStatus(401);
+      }
+
+      if (req.comment.seller._id.toString() !== req.payload.id.toString()) {
+        return res.sendStatus(403);
+      }
+
+      return Comment.findByIdAndRemove(req.comment._id)
+        .then(function() {
+          return res.sendStatus(204);
+        });
+    })
+    .catch(next);
 });
 
 module.exports = router;
